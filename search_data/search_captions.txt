@@ -1,10 +1,10 @@
-1	1	A cat standing on carpet is interested in a piece of string in the air nearby wood flooring.
-1	2	A white and brown cat bats at a frayed string dangling in front of him
-1	3	Cat playing with a dangling string.
-1	4	Cat standing to play with string.
-1	5	The white and black cat pawed at the piece of fabric.
-2	1	A brown dog wearing an orange collar leaping to catch a bright colored ball.
-2	2	A dog catching a ball
-2	3	A dog leaps away with a ball in its mouth.
-2	4	A dog leaps high to catch a ball.
-2	5	A jog is jumping in the air to catch a ball in a backyard.
+1	A cat standing on carpet is interested in a piece of string in the air nearby wood flooring.
+1	A white and brown cat bats at a frayed string dangling in front of him
+1	Cat playing with a dangling string.
+1	Cat standing to play with string.
+1	The white and black cat pawed at the piece of fabric.
+2	A brown dog wearing an orange collar leaping to catch a bright colored ball.
+2	A dog catching a ball
+2	A dog leaps away with a ball in its mouth.
+2	A dog leaps high to catch a ball.
+2	A jog is jumping in the air to catch a ball in a backyard.

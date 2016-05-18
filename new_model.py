@@ -12,6 +12,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tensorflow.models.rnn import rnn, rnn_cell
 
+def make_tensor_placeholder(lol):
+    # [break_point, sample_index, 0]
+    r_val = np.array([ [[len(lol[i]) - 1, i, 0]] for i in range(len(lol)) ] ) 
+    # print "r_val", r_val.shape
+    return r_val
+
 def crop_image(x, target_height=227, target_width=227, as_float=True):
     #image = skimage.img_as_float(skimage.io.imread(x)).astype(np.float32)
     image = io.imread(x)
@@ -48,7 +54,7 @@ def read_image(path):
      return img
 
 def apply_to_zeros(lst, dtype=np.int64):
-    inner_max_len = max(map(len, lst))
+    inner_max_len = n_lstm_steps
     result = np.zeros([len(lst), inner_max_len], dtype)
     for i, row in enumerate(lst):
         for j, val in enumerate(row):
@@ -89,6 +95,8 @@ def process_captions(path_to_file, path_to_save=False):
     return len(word_to_id), caption_features
 
 def process_images(path_to_images, path_to_save=False):
+    # http://nlp.cs.illinois.edu/HockenmaierGroup/8k-pictures.html
+    # http://vision.cs.uiuc.edu/pascal-sentences/
     vgg_path='/home/priyam/deep-learning/vgg16.tfmodel'
 
     with open(vgg_path) as f:
@@ -114,7 +122,7 @@ def process_images(path_to_images, path_to_save=False):
     sess.close()
     return image_features
 
-def rnn_model(X, init_state, lstm_size):
+def rnn_model(X, init_state, lstm_size, slicing_tensors):
     # X, input shape: (batch_size, input_vec_size, time_step_size)
     # print "X shape", X.get_shape().as_list()
     XT = tf.transpose(X, [1, 0, 2])  # permute time_step_size and batch_size
@@ -137,7 +145,8 @@ def rnn_model(X, init_state, lstm_size):
 
     # Get lstm cell output, time_step_size (28) arrays with lstm_size output: (batch_size, lstm_size)
     outputs, _states = rnn.rnn(lstm, X_split, initial_state=init_state)
-
+    # print  "outputs", outputs[0].get_shape()
+    outputs = tf.reshape(tf.concat(0, outputs), [n_lstm_steps, batch_size, dim_hidden])
     # Linear activation is NOT REQUIRED!!
     # Get the last output.
     # print "outputs"
@@ -145,12 +154,15 @@ def rnn_model(X, init_state, lstm_size):
     # print outputs
 
     # Slicing the appropriate output vectors from the <outputs>
-    sliced_outputs = [tf.slice(outputs[break_points[i]-1], slicing_lengths[i][0], slicing_lengths[i][1]) for i in range(batch_size)]
+    # sliced_outputs = [tf.slice(outputs[break_points[i]-1], slicing_lengths[i][0], slicing_lengths[i][1]) for i in range(batch_size)]
+    slicing_tensors = [tf.squeeze(tsr) for tsr in tf.split(0, batch_size, slicing_tensors)]
+    # print  "slicing_tensors", slicing_tensors[0].get_shape()
+    sliced_outputs = [tf.slice(outputs, begin=tensor, size=[1, 1, 256]) for tensor in slicing_tensors]
     # for begin,size in slicing_lengths:
         # print tf.slice(outputs, begin, size)
 
     # return outputs[-1], lstm.state_size # State size to initialize the state
-    return tf.concat(0, sliced_outputs), lstm.state_size
+    return tf.squeeze(tf.concat(0, sliced_outputs)), lstm.state_size
 
 ######################################################################
 ################################training + testing code########################
@@ -167,6 +179,8 @@ print "break_points", break_points
 n_lstm_steps = max(len(x) for x in caption_features['1'])
 image_features = process_images('search_data')
 print "n_lstm_steps", n_lstm_steps
+
+slicing_tensors = tf.placeholder(tf.int32, [batch_size, 1, 3]) 
 
 # Word embedding matrix
 with tf.device("/cpu:0"):
@@ -194,7 +208,7 @@ sentence_output_pl = tf.placeholder(tf.float32, [None, dim_hidden], name="senten
 init_state = tf.placeholder(tf.float32, [None, 2*dim_hidden], name="init_state")
 # steps = tf.placeholder(tf.int32, shape=[1], name="lstm_steps") # Sequence length passed during runtime - there must be a faster way...
 
-py_x, state_size = rnn_model(sentence_map, init_state, dim_hidden)
+py_x, state_size = rnn_model(sentence_map, init_state, dim_hidden, slicing_tensors)
 l2_norm = lambda mat: tf.sqrt(tf.reduce_sum(tf.square(mat), 1))
 cost = tf.reduce_mean(l2_norm(py_x - image_map))
 train_op = tf.train.AdamOptimizer(0.001).minimize(cost)
@@ -211,20 +225,25 @@ sess.run(tf.initialize_all_variables())
 # print "image_map", sess.run(image_map, feed_dict={image_pl: image_features['1']}).shape
 # print "sentence_map", sess.run(sentence_map, feed_dict={sentence_pl: np.matrix(caption_features['1'][0])}).shape
 for i in range(50):
-    sess.run(train_op,
-                feed_dict={
-                    init_state: np.zeros((batch_size, state_size)),
-                    sentence_pl: np.array(apply_to_zeros(caption_features['1'])),
-                    image_pl: image_features['1']
-                }   
-    )
-    print i, sess.run(cost,
-                feed_dict={
-                    init_state: np.zeros((batch_size, state_size)),
-                    sentence_pl: np.array(apply_to_zeros(caption_features['1'])),
-                    image_pl: image_features['1']
-                }   
-    )
+    _cost_ = 0
+    for key in caption_features.keys():
+        sess.run(train_op,
+                    feed_dict={
+                        init_state: np.zeros((batch_size, state_size)),
+                        sentence_pl: np.array(apply_to_zeros(caption_features[key])),
+                        image_pl: image_features[key],
+                        slicing_tensors: make_tensor_placeholder(caption_features[key])
+                    }   
+            )
+        _cost_ += sess.run(cost,
+                    feed_dict={
+                        init_state: np.zeros((batch_size, state_size)),
+                        sentence_pl: np.array(apply_to_zeros(caption_features[key])),
+                        image_pl: image_features[key],
+                        slicing_tensors: make_tensor_placeholder(caption_features[key])
+                    }   
+            )
+    print i, _cost_
 
     # print sess.run(py_x, 
     #                         feed_dict={
