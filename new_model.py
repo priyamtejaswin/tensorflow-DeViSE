@@ -1,5 +1,7 @@
 ## Once again, our quest for understanding the mysteries of deep learning continues,
 ## this time, exploring "deep" image search systems.
+import sys
+import string
 import time
 import os
 import cv2
@@ -62,51 +64,29 @@ def apply_to_zeros(lst, dtype=np.int32):
             result[i][j] = val
     return result
 
-def process_captions(path_to_file=False, list_of_captions=False, path_to_save=False):
-    # http://www.flickr.com/photos/luckyrva/3229898555/
-    # http://www.flickr.com/photos/salsaboy/3423509305/
-    word_list = []
-    split_caption = lambda line: line[:-1].strip().lower().split() if line[-1]=='.' else line.strip().lower().split()
+def split_caption(sentence):
+    valid = string.letters + ' '
+    s = ''
+    for l in sentence.lower():
+        if l in valid:
+            s+=l
+        else:
+            s+=' '
+    return s.strip().split()
 
-    # First pass to create the vocabulary.
-    if list_of_captions==False:
-        with open(path_to_file) as fp:
-            reader = csv.reader(fp, delimiter='\t')
-            for row in reader:
-                caption = row[-1].strip()
-                tokens = split_caption(caption)
-                word_list.extend(tokens)
-    else:
-        for caption in list_of_captions:
-            tokens = split_caption(caption.strip())
-            word_list.extend(tokens)
-
-    word_to_id = {v:i for i,v in enumerate(set(word_list), 1)}
-    id_to_word = {v:k for k,v in word_to_id.iteritems()}
-    word_to_id['<NUL>'] = 0
-    id_to_word[0] = '<NUL>' 
-    print "Unique words:", len(word_to_id)
-    
-    pickle.dump(word_to_id, open('word_to_id.pkl', 'w'))
-    pickle.dump(id_to_word, open('id_to_word.pkl', 'w'))
-
+def process_captions(path_to_w2id=False, list_of_captions=False, path_to_save=False):
+    try:
+        word_to_id = pickle.load(open(path_to_w2id))
+    except:
+        word_to_id = path_to_w2id
     # Second pass to encode the words as tokens.
-    if list_of_captions==False:
-        caption_features = defaultdict(list)
-        with open(path_to_file) as fp:
-            reader = csv.reader(fp, delimiter='\t')
-            for row in reader:
-                img_id = row[0]
-                tokens = split_caption(row[-1].strip())
-                caption_features[img_id].append([word_to_id[t] for t in tokens])
-        return len(word_to_id), caption_features
-
-    else:
-        caption_features = []
-        for caption in list_of_captions:
-            tokens = split_caption(caption)
-            caption_features.append([word_to_id[t] for t in tokens])
-        return caption_features
+    get_id = lambda w: word_to_id[w] if w in word_to_id else 0
+    caption_features = []
+    
+    for caption in list_of_captions:
+        tokens = split_caption(caption)
+        caption_features.append([get_id(t) for t in tokens])
+    return caption_features
 
 def process_images(path_to_images, path_to_save=False):
     # http://nlp.cs.illinois.edu/HockenmaierGroup/8k-pictures.html
@@ -183,19 +163,18 @@ def rnn_model(X, init_state, lstm_size, slicing_tensors):
 vgg_path='/home/priyam/deep-learning/vgg16.tfmodel'
 dim_image = 4096
 dim_embed = dim_hidden = 300
-# vocab_size, caption_features = process_captions(path_to_file='search_data/search_captions.txt', list_of_captions=False)
 caption_features = pickle.load(open('150_caption_features.pkl'))
 vocab_size = len(pickle.load(open('word_to_id.pkl')))
-batch_size = 10 + 1
-num_con = 10
+batch_size = 20 + 1
+num_con = 20
 image_features = pickle.load(open('150_image_features.pkl'))
 # slicing_lengths = [ [(i, 0), (1, dim_embed)] for i in range(len(caption_features['1']))  ]
 # print "slicing_lengths", slicing_lengths
 # break_points = [len(x) for x in caption_features['1']]
 # print "break_points", break_points
 n_lstm_steps = max(len(x) for x in caption_features)
-margin = 0.2
-max_epochs = 25
+margin = 0.1
+max_epochs = 50
 # image_features = process_images('search_data')
 print "vocab_size", vocab_size
 print "batch_size", batch_size
@@ -237,7 +216,7 @@ def alt_cost(image, con_image, py_s):
 ##############################main-TRAINING FUNCTION########################
 ######################################################################
 
-def main():
+def main(pre_trained_WEs=False):
     slicing_tensors = tf.placeholder(tf.int32, [batch_size, 1, 3]) 
     # Word embedding matrix
     with tf.device("/cpu:0"):
@@ -282,13 +261,19 @@ def main():
 
     sess = tf.InteractiveSession()
     sess.run(tf.initialize_all_variables())
+
+    if pre_trained_WEs:
+        print "\nLoading pre-trained Word Embeddings from:", pre_trained_WEs
+        ptr_wes = pickle.load(open(pre_trained_WEs))
+        sess.run(Wemb.assign(ptr_wes))
+
     print "\n----All variables initialized...Commence model training----\n"
     
     for epoch in range(1, max_epochs+1):
         _cost_ = 0
         for i in range(len(image_features)):
 
-            valid_caption_ids = caption_features[i*5 : (i+1)*5]
+            valid_caption_ids = caption_features[i*10 : (i+1)*10]
             cont_cap_candidates = [x for x in range(len(caption_features)) if x not in valid_caption_ids]
             cont_img_candidates = [x for x in range(len(image_features)) if x!=i]
            
@@ -369,10 +354,11 @@ def extract_all_image_features(path_to_images, image_subset=False, batch_size=1)
                 batch_of_images.append(read_image(path))
 
         batch_of_images = np.vstack(batch_of_images)
+        print "Batch of images:", len(batch_of_images)
         image_features = []
-        for i in range(0, len(batch_of_images), 10):
-            print "processing images", i, "to", i+10
-            image_features.append(iSess.run(graph.get_tensor_by_name("import/fc7_relu:0"),  feed_dict={images:batch_of_images[i:i+10]}))
+        for i in range(0, len(batch_of_images), batch_size)[:-1]:
+            print "processing images", i, "to", i+batch_size
+            image_features.append(iSess.run(graph.get_tensor_by_name("import/fc7_relu:0"),  feed_dict={images:batch_of_images[i: i+batch_size]}))
             
     iSess.close()
     return image_ids, np.vstack(image_features)
@@ -386,18 +372,50 @@ def build_feature_pkls():
         if key in ['dog', 'cat', 'bird']:
             subset_images.extend(topics[key])
 
+    list_of_captions = []
+    for c in subset_images:
+        list_of_captions.extend(captions[c] )
+
+    w2id = pre_process_captions(list_of_captions=list_of_captions)
+    caption_features = process_captions(w2id, list_of_captions=list_of_captions)
+    
+    with open('150_caption_features.pkl', 'w') as fp:
+        pickle.dump(caption_features, fp)
+        fp.flush()
+
+    # return
+
     t0 = time.time()
-    image_ids, image_features = extract_all_image_features('pascal/pascal-sentences_files', subset_images, 10)
+    image_ids, image_features = extract_all_image_features('pascal/pascal-sentences_files', subset_images, 20)
     t1 = time.time()
     print "image features:", len(image_features), image_features.shape
     print (t1-t0)/60, "mins\n"
 
     print image_ids
     pickle.dump(image_ids, open('image_ids.pkl', 'w'))
+    pickle.dump(image_features, open('150_image_features', 'w'))
+
+def pre_process_captions(list_of_captions):
+    word_list = []
+    # First pass to create the vocabulary.
+    for caption in list_of_captions:
+        tokens = split_caption(caption.strip())
+        word_list.extend(tokens)
+
+    # word_list = [w for w in word_list if w not in ['jackethalter', '<NUL>', 'fencepost']]
+    word_to_id = {v:i for i,v in enumerate(set(word_list), 1)}
+    id_to_word = {v:k for k,v in word_to_id.iteritems()}
+    word_to_id['<NUL>'] = 0
+    id_to_word[0] = '<NUL>' 
+    print "Unique words:", len(word_to_id)
+    
+    pickle.dump(word_to_id, open('word_to_id.pkl', 'w'))
+    pickle.dump(id_to_word, open('id_to_word.pkl', 'w'))
+
+    print max(word_to_id.itervalues()), max(id_to_word.iterkeys())
+    return word_to_id
 
 if __name__ == '__main__':
     # pass
-    # process_captions('search_data/search_captions.txt')
-    # process_images('search_data')
     # build_feature_pkls()
-    main()
+    main(pre_trained_WEs='glove_NO_UKN.npy')
