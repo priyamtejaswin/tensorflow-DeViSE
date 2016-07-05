@@ -380,8 +380,8 @@ def extract_all_image_features(path_to_images, image_subset=False, batch_size=1)
     return image_ids, np.vstack(image_features)
 
 def build_feature_pkls():
-    topics = pickle.load(open('pascal/topic_to_images.pkl'))
-    captions = pickle.load(open('pascal/image_to_captions.pkl'))
+    topics = pickle.load(open('../pascal/topic_to_images.pkl'))
+    captions = pickle.load(open('../pascal/image_to_captions.pkl'))
 
     subset_images = []
     for key in topics.keys():
@@ -400,7 +400,6 @@ def build_feature_pkls():
         fp.flush()
 
     # return
-
     t0 = time.time()
     image_ids, image_features = extract_all_image_features('pascal/pascal-sentences_files', subset_images, 20)
     t1 = time.time()
