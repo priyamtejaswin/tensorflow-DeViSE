@@ -174,7 +174,7 @@ image_features = pickle.load(open('150_image_features.pkl'))
 # print "break_points", break_points
 n_lstm_steps = max(len(x) for x in caption_features)
 margin = 0.1
-max_epochs = 50
+max_epochs = 20
 # image_features = process_images('search_data')
 print "vocab_size", vocab_size
 print "batch_size", batch_size
@@ -216,7 +216,7 @@ def alt_cost(image, con_image, py_s):
 ##############################main-TRAINING FUNCTION########################
 ######################################################################
 
-def main(pre_trained_WEs=False):
+def main(pre_trained_WEs=False, load_session_path=False, ckpt_dir=False):
     slicing_tensors = tf.placeholder(tf.int32, [batch_size, 1, 3]) 
     # Word embedding matrix
     with tf.device("/cpu:0"):
@@ -252,12 +252,19 @@ def main(pre_trained_WEs=False):
     # l2_norm = lambda mat: tf.sqrt(tf.reduce_sum(tf.square(mat), 1))
     # cost = tf.reduce_mean(l2_norm(py_x - image_map))
     cost = alt_cost(image_map, con_image_map, py_x)
+    global_step = tf.Variable(0, name='global_step', trainable=False)
+    one = tf.constant(1)
+    new_value = tf.add(global_step, one)
+    update = tf.assign(global_step, new_value)
     train_op = tf.train.AdamOptimizer(0.001).minimize(cost)
 
     ######################################################################
     ################################Tensorflow graph session#######################
     ######################################################################
     select_random = lambda ls, num: np.random.choice(ls, num, replace=False)
+
+    # Saver - for interrupting/restoring session
+    saver = tf.train.Saver()
 
     sess = tf.InteractiveSession()
     sess.run(tf.initialize_all_variables())
@@ -269,6 +276,10 @@ def main(pre_trained_WEs=False):
 
     print "\n----All variables initialized...Commence model training----\n"
     
+    if load_session_path:
+        print "Attempting to restore session at:", load_session_path
+        saver.restore(sess, load_session_path)
+
     for epoch in range(1, max_epochs+1):
         _cost_ = 0
         for i in range(len(image_features)):
@@ -316,10 +327,15 @@ def main(pre_trained_WEs=False):
                             }   
                     )
 
+        sess.run(update)
+        if epoch%2==0:
+            saver.save(sess, ckpt_dir + '/model.ckpt', global_step=global_step)
+            print "Saved model at epoch:", sess.run(global_step)
         print epoch,  _cost_
 
     # Works till here!
     sess.close()
+    print "Model training COMPLETE"
 
 def extract_all_image_features(path_to_images, image_subset=False, batch_size=1):
     with open(vgg_path) as f:
@@ -418,4 +434,6 @@ def pre_process_captions(list_of_captions):
 if __name__ == '__main__':
     # pass
     # build_feature_pkls()
-    main(pre_trained_WEs='glove_NO_UKN.npy')
+    main(pre_trained_WEs='glove_NO_UKN.npy', 
+            # load_session_path='model_ckpts/model.ckpt-3', 
+            ckpt_dir='model_ckpts')
