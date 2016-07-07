@@ -21,4 +21,3 @@ Once the words have been encoded as vectors, I had to "condense" the list of vec
 Once again, a two step process. First, I extract the "best possible" feature vector from the image. The paper suggests to train a visual object recognition system based on the ILSVRC 2012 winner. Instead, I use [VGG16](http://www.robots.ox.ac.uk/~vgg/research/very_deep/) pre-trained weights for tensorflow, which can be downloaded from [here](https://drive.google.com/file/d/0B5o40yxdA9PqSGtVODN0UUlaWTg/view). The features are extracted from the last fully connected layer of the network.
 
 Once the image feautre vector has been extracted, a linear transformation maps the vector to new dimension space. The size of the encoded images should be the same as the size of the encoded queries. 
-
