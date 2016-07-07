@@ -5,7 +5,7 @@ Series of events which led to this repo:<br>
 2. Tried to hack using theano.<br>
 3. Tried to hack using tensorflow.<br><br>
 
-The paper's objective (as described in Section 3) is to *"leverage semantic knowledge learned in the text domain, and transfer it to a model trained for visual object recognition"*, which is exactly what I did...sort of.<br><br>
+The paper's objective (as described in Section 3) is to *"leverage semantic knowledge learned in the text domain, and transfer it to a model trained for visual object recognition"*, which is exactly what I did...sort of.
 
 Before you start ranting about my software development skills, I want to reiterate that its a crude implementation of the paper and also, I was developing/testing this on my Dell laptop which has a ATI graphics card (bye bye CUDA). My definition of success for this project was to make something which (1)works and (2)decreases the error. I'm putting the code online because I could not find beginner level code for using/hacking recurrent neural networks. This "work" is a result of repeatedly editing(and breaking) the RNN language model examples available with tensorflow. Hopefully, someone can use this to start their own RNN experiments.
 
