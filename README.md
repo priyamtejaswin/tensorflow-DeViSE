@@ -21,3 +21,21 @@ Once the words have been encoded as vectors, I had to "condense" the list of vec
 Once again, a two step process. First, I extract the "best possible" feature vector from the image. The paper suggests to train a visual object recognition system based on the ILSVRC 2012 winner. Instead, I use [VGG16](http://www.robots.ox.ac.uk/~vgg/research/very_deep/) pre-trained weights for tensorflow, which can be downloaded from [here](https://drive.google.com/file/d/0B5o40yxdA9PqSGtVODN0UUlaWTg/view). The features are extracted from the last fully connected layer of the network.
 
 Once the image feautre vector has been extracted, a linear transformation maps the vector to new dimension space. The size of the encoded images should be the same as the size of the encoded queries. 
+
+### Loss function:
+Once encoded, the query string and the image have equal dimensions. The loss function proposed in the paper is a hinge rank loss described in Section 3.3. Its similar to hinge loss with the addition of contrastive(or inappropriate) pairs: at every training epoch, the weights are updated based on how close appropriate training pairs are and how far inappropriate pairs are.
+
+The purpose of the model is to minimize this loss function and update the weights of all parameters using gradient descent. The data I used for development was the [Pascal dataset](http://vision.cs.uiuc.edu/pascal-sentences/). It contains 5 captions per image for 20 different catagories of objects; each catagory had 50 images. While developing this, I used a subset(150 images) of dogs, cats and birds.
+
+### Code:
+All the code is in `new_model.py`. The hyperparameters are global variables; a main function creates the model and starts training. The code for the model is only half of all the code in the file, the rest are just utility functions for processing data and handling I/O. I've tried to add comments regularly; it should be simple enough to read starting from the `main()` function. If you're feeling up to the task of hacking this for your own experiments(best of luck!!!), here's a list of python modules you'll need to get started:
+- tensorflow 0.8
+- numpy 1.11
+- cv2 2.4.8
+- skimage 0.9.3
+
+I've seen boilerplate code where people have used [Caffe](http://caffe.berkeleyvision.org/tutorial/) for [extracting image features](https://github.com/BVLC/caffe/blob/master/examples/00-classification.ipynb) using AlexNet, CaffeNet etc. Please feel free to use that if its easier; that part of the pipeline is only used for feature extraction(it is not trained/updated during backprop so it should be easy to substitute). 
+
+### To do:
+- Add utility/interface for querying images once the model has been trained.
+- Add a better way to evaluate model training(accuracy, recall etc).
